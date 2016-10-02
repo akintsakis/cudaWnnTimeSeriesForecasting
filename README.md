@@ -26,13 +26,13 @@ The values of the inputs, size of training set and how many values forward to fo
 Below are some values that seem to yield acceptable forecasts with the sample datasets (for all examples below we assume that threadnum is set to 256)
 
 sample_input1_sinusoidal_plateau.txt  
-define inputs 18  
+define inputs 8  
 define hidd_neurons 2  
 define hours_each 4  
 define off 5  
 
 sample_input2_sinusoidal_plateau_random.txt  
-define inputs 18  
+define inputs 8  
 define hidd_neurons 2  
 define hours_each 4  
 define off 5  
@@ -44,7 +44,7 @@ define hours_each 4
 define off 5  
 
 sample_input4_greek_energy_market_load.txt  
-define inputs 18  
+define inputs 24  
 define hidd_neurons 2  
 define hours_each 4  
 define off 5  
