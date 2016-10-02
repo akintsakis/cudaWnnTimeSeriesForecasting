@@ -16,8 +16,8 @@ Please check the defined parameters at the top of the .cu file, they directly af
 # Compile and Run
 Compile with nvcc. You can experiment with the example input datasets. To run, you need to provide only one argument, the name of the input file that must be located within the same folder with the executable. For example, in windows to compile and run you can use
 
-nvcc cudaWnnTimeSeriesForecasting.cu
-a.exe sample_input1_sinusoidal_plateau.txt
+nvcc cudaWnnTimeSeriesForecasting.cu  
+a.exe sample_input1_sinusoidal_plateau.txt  
 
 you can replace the input file with any other valid input file, either from the included samples or your own.
 
@@ -25,26 +25,26 @@ you can replace the input file with any other valid input file, either from the 
 The values of the inputs, size of training set and how many values forward to forecast depend on the actual input data.
 Below are some values that seem to yield acceptable forecasts with the sample datasets (for all examples below we assume that threadnum is set to 256)
 
-sample_input1_sinusoidal_plateau.txt
-define inputs 18
-define hidd_neurons 2
-define hours_each 4
-define off 5
+sample_input1_sinusoidal_plateau.txt  
+define inputs 18  
+define hidd_neurons 2  
+define hours_each 4  
+define off 5  
 
-sample_input2_sinusoidal_plateau_random.txt
-define inputs 18
-define hidd_neurons 2
-define hours_each 4
-define off 5
+sample_input2_sinusoidal_plateau_random.txt  
+define inputs 18  
+define hidd_neurons 2  
+define hours_each 4  
+define off 5  
 
-sample_input3_mckey_glass.txt
-define inputs 8
-define hidd_neurons 2
-define hours_each 4
-define off 5
+sample_input3_mckey_glass.txt  
+define inputs 8  
+define hidd_neurons 2  
+define hours_each 4  
+define off 5  
 
-sample_input4_greek_energy_market_load.txt
-define inputs 18
-define hidd_neurons 2
-define hours_each 4
-define off 5
+sample_input4_greek_energy_market_load.txt  
+define inputs 18  
+define hidd_neurons 2  
+define hours_each 4  
+define off 5  
