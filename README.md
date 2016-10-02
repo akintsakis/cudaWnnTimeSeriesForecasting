@@ -13,7 +13,7 @@ Should you find the system useful, please cite the above work.
 # Implementation Details
 Please check the defined parameters at the top of the .cu file, they directly affect shared memory. Be sure to remain within the limits of your GPU architecture.
 
-# Compiple and Run
+# Compile and Run
 Compile with nvcc. You can experiment with the example input datasets. To run, you need to provide only one argument, the name of the input file that must be located within the same folder with the executable. For example, in windows to compile and run you can use
 
 nvcc cudaWnnTimeSeriesForecasting.cu
