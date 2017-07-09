@@ -140,8 +140,8 @@ __global__ void find_gbest_kernel(float *particle_best_positions, float *particl
         if (particle_mins[0] < current_gbest_fitness[0]) {
             current_gbest_fitness[0] = particle_mins[0];
             signal_value = 1;
-            //!!!! Disable the print for normal usage !!!!
-            printf("fitness: %f \n", current_gbest_fitness[0]);
+            //!!!! Disable the print for normal usage !!!! Use only for debug
+            //printf("fitness: %f \n", current_gbest_fitness[0]);
 
         }
     }
