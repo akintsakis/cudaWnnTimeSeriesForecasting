@@ -6,13 +6,14 @@
 
 /* WNN and PSO parameters that also affect CUDA shared memory size */
 #define particle_num 1024 
-#define inputs 8 //how many previous sequential inputs should be used to forecast
+#define inputs 24 //how many previous sequential inputs should be used to forecast
 #define hidd_neurons 2
-#define particle_dimension (((inputs+1)+2)*hidd_neurons)
+#define particle_dimension ((3*inputs+1)*hidd_neurons)
 #define threadnum 256 //threadnum multiplied by hours_each equals size of training set
 #define hours_each 4
-#define off 5 //how many values forward to predict, a value of 0 means 1 value forward, a value of 2 means 2 values forward etc
+#define off 8 //how many values forward to predict, a value of 0 means 1 value forward, a value of 2 means 2 values forward etc
 #define training_time_hours (inputs+hours_each*threadnum+off)
+
 /* */
 
 /* Calculate Fitness Function for all particles Kernel */
@@ -60,14 +61,9 @@ __global__ void calculate_particle_fitnesses_kernel(float* particles, float* lbe
     }
 
     __syncthreads();
-    int n_offset = (inputs + 1) + 2;
+    int n_offset = 3*inputs+1;
     for (int training_set_position = start_set; training_set_position < end_set; training_set_position++) {
         int input_scale_back = inputs;
-        float x = 0;
-        for (int l = 0; l < inputs; l++) {
-            x = x + training_set[training_set_position + l - input_scale_back] * training_set[training_set_position + l - input_scale_back];
-        }
-        x = (float) sqrt(x);
         float llwnn_output = 0;
         for (int j = 0; j < hidd_neurons; j++) {
             float linear_factor = 0;
@@ -76,15 +72,21 @@ __global__ void calculate_particle_fitnesses_kernel(float* particles, float* lbe
                 linear_factor = linear_factor + particle_data[ j * n_offset + k + 1 ] * training_set[training_set_position + k - input_scale_back];
             }
             linear_factor = linear_factor + particle_data[ j * n_offset + 0 ];
-            float a = (float) abs(particle_data[(j + 1) * n_offset - 2]);
-
-            if (a == 0) {
+			float total_wavelet_factor = 0;
+			
+			for(int k = 0; k < inputs; k++) {
+				float a = (float)abs(particle_data[ j * n_offset + inputs + 1 ]);
+				if (a == 0) {
                 a = 0.00000000001f;
-            }
-            float b = particle_data[(j + 1) * n_offset - 1];
-            float in = (x - b) / (a);
-            float wavelet_factor = (float) pow(a, -0.5f) *((-(in * in) / 2.0f) * (float) exp(-(in * in) / 2.0f));
-            llwnn_output = llwnn_output + linear_factor*wavelet_factor;
+                }
+				
+				float b = particle_data[ j * n_offset + inputs + inputs + 1 ];
+				float x = training_set[training_set_position + k - input_scale_back];
+				float in = (x - b) / (a);
+				total_wavelet_factor = total_wavelet_factor + (float) pow(a, -0.5f) *((-(in * in) / 2.0f) * (float) exp(-(in * in) / 2.0f));
+			}
+		
+            llwnn_output = llwnn_output + linear_factor * total_wavelet_factor;
         }
         thread_error[threadIdx.x] = thread_error[threadIdx.x]+(training_set[training_set_position + off] - llwnn_output)*(training_set[training_set_position + off] - llwnn_output);
     }   
@@ -249,7 +251,7 @@ __global__ void setup_kernel(curandState * state, unsigned long seed) {
 int main(int argc, char **argv) {
 
 	/* PSO Algorithm training parameters */
-    int num_iterations = 50000;
+    int num_iterations = atoi(argv[1]);
 	float Dmax1 = 1000000.0;
 	float b = 0.4;
     float b0 = 0.05;
@@ -262,7 +264,7 @@ int main(int argc, char **argv) {
     }
 	
 	FILE *myFile;    
-	myFile = fopen(argv[1], "r");
+	myFile = fopen(argv[2], "r");
 	if (myFile == NULL) {
 		printf("Error opening input file \n");
 		exit(1);
@@ -275,14 +277,17 @@ int main(int argc, char **argv) {
     
 
     /* Read training set file into array */
-    float *host_training_set = (float *) malloc(training_time_hours * sizeof (float));  
+    float *host_training_set = (float *) malloc((training_time_hours + (training_time_hours * 0.3)) * sizeof (float));  
+	
+	//test set size = 0.3 * training set size
+	//float *host_test_set = (float *) malloc(training_time_hours + training_time_hours * 0.3 * sizeof (float));  
     if (myFile == NULL) {
         printf("Error Reading File\n");
         exit(0);
     }	
 	
 	int i;	
-    for (i = 0; i < training_time_hours; i++) {
+    for (i = 0; i < training_time_hours + (training_time_hours * 0.3); i++) {
         fscanf(myFile, "%f,", &host_training_set[i]);
     }
     fclose(myFile);
@@ -372,56 +377,55 @@ int main(int argc, char **argv) {
     cudaFree(dev_particles_fitness);
     cudaFree(dev_training_set);
 
-    /* Applying model on test data. By default testdata=trainingdata. Change it below with the Start and Stop indexes */
+    /* Applying model on test data. By default testdata size is equal to 0.3 * training_data size and is located immediatelly after the training data,
+       in the time series. Change it below with the Start and Stop indexes */
 	/* Predicted and Actual values are written to file results.txt */
 	FILE *f = fopen("results.txt", "w");
 	if (f == NULL) {
 		printf("Error opening file results.txt \n");
 		exit(1);
 	}
-	//fprintf(f, "Actual Forecasted \n");
+
 	
-	
-    int testSetStartPosition = inputs;
-    int testSetStopPosition = training_time_hours-off;
-    int n_offset = (inputs + 1) + 2;
+    int testSetStartPosition = training_time_hours;
+    int testSetStopPosition = training_time_hours + training_time_hours * 0.3 - off;
+    int n_offset = 3*inputs+1;
 
     float testSetRMSE = 0;    
     float s = 2.0f;
     for (int SetCurrentPosition = testSetStartPosition; SetCurrentPosition < testSetStopPosition; SetCurrentPosition++) {
-        int tttt1 = inputs;
-        float x = 0;
-        for (int l = 0; l < inputs; l++) {
-            x = x + host_training_set[SetCurrentPosition + l - tttt1] * host_training_set[SetCurrentPosition + l - tttt1];
-        }
-        x = sqrt(x);
-        float temp2 = 0;
-        for (int j = 0; j < hidd_neurons; j++) {
-            float temp = 0;
-            tttt1 = inputs;
-            for (int k = 0; k < inputs; k++) {
-                temp = temp + host_globalbestpos[ j * n_offset + k + 1 ] * host_training_set[SetCurrentPosition + k - tttt1];
-            }
-            temp = temp + host_globalbestpos[ j * n_offset + 0 ];
-            float a = (float) abs(host_globalbestpos[(j + 1) * n_offset - 2]);
 
-            if (a == 0) {
-                a = 0.00000000001f;
+	    float llwnn_output = 0;
+        for (int j = 0; j < hidd_neurons; j++) {
+			
+			float linear_factor = 0;
+            int input_scale_back = inputs;
+            for (int k = 0; k < inputs; k++) {
+                linear_factor = linear_factor + host_globalbestpos[ j * n_offset + k + 1 ] * host_training_set[SetCurrentPosition + k - input_scale_back];
             }
-            float b = host_globalbestpos[(j + 1) * n_offset - 1];
-            float in = (x - b) / (a);
-            float psf2 = (float) pow(a, -0.5f) *((-(in * in) / 2.0f) * (float) exp(-(in * in) / s));
-            temp2 = temp2 + temp*psf2;
+            linear_factor = linear_factor + host_globalbestpos[ j * n_offset + 0 ];
+			float total_wavelet_factor = 0;
+			
+			for(int k = 0; k < inputs; k++) {
+				float a = (float)abs(host_globalbestpos[ j * n_offset + inputs + 1 ]);
+				if (a == 0) {
+                a = 0.00000000001f;
+                }
+				
+				float b = host_globalbestpos[ j * n_offset + inputs + inputs + 1 ];
+				float x = host_training_set[SetCurrentPosition + k - input_scale_back];
+				float in = (x - b) / (a);
+				total_wavelet_factor = total_wavelet_factor + (float) pow(a, -0.5f) *((-(in * in) / 2.0f) * (float) exp(-(in * in) / 2.0f));
+			}
+			llwnn_output = llwnn_output + linear_factor*total_wavelet_factor;
         }
-        testSetRMSE = testSetRMSE + (temp2 - host_training_set[SetCurrentPosition + off]) * (temp2 - host_training_set[SetCurrentPosition + off]);
-        //activate this print for side by side real to forecasted values comparison
-        //printf("%f %f \n",host_training_set[SetCurrentPosition], temp2);
-		//First Value is actual, second value is forecasted
-		fprintf(f, "%f %f \n",host_training_set[SetCurrentPosition + off], temp2);
+
+        testSetRMSE = testSetRMSE + (llwnn_output - host_training_set[SetCurrentPosition + off]) * (llwnn_output - host_training_set[SetCurrentPosition + off]);
+		fprintf(f, "%f %f \n",host_training_set[SetCurrentPosition + off], llwnn_output);
     }
 	fclose(f);
     testSetRMSE = sqrt(testSetRMSE / (float) (testSetStopPosition - testSetStartPosition));
-    printf("Calculate RMSE on training set: %f \n", testSetRMSE);
+    printf("Calculate RMSE on test set: %f \n", testSetRMSE);
     printf("\n");
     printf("\n");
     return 0;
