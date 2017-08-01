@@ -63,6 +63,7 @@ __global__ void calculate_particle_fitnesses_kernel(float* particles, float* lbe
         }
     }
 
+    __syncthreads();	
     if (training_time_hours < threadnum) {
         training_set[threadIdx.x] = particles[threadIdx.x];
     } else {
